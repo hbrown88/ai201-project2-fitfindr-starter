@@ -74,8 +74,17 @@ def search_listings(
         size_lower = size.lower()
         listings = [l for l in listings if size_lower in l["size"].lower()]
 
-    # Score each listing by keyword overlap with description
-    keywords = set(re.sub(r"[^a-z0-9\s]", "", description.lower()).split())
+    # Score each listing by keyword overlap with description.
+    # Strip stop words so common filler ("a", "to", "with", "for", ...) doesn't
+    # inflate scores for unrelated listings.
+    _STOP = {
+        "a", "an", "the", "and", "or", "but", "for", "to", "of", "in", "on",
+        "at", "by", "as", "is", "it", "be", "my", "i", "im", "me", "we", "do",
+        "go", "with", "that", "this", "some", "are", "was", "have", "has",
+        "looking", "pair", "something", "want", "need", "find", "show", "get",
+        "like", "any", "up", "so", "no", "not", "if", "from", "out", "into",
+    }
+    keywords = set(re.sub(r"[^a-z0-9\s]", "", description.lower()).split()) - _STOP
 
     def score(listing: dict) -> int:
         searchable = " ".join([

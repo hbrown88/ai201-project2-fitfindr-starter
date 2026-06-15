@@ -105,13 +105,25 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     if price_match:
         text = text[:price_match.start()] + text[price_match.end():]
 
+    # (?<!) lookbehind prevents matching letters inside contractions like "I'm"
+    # (apostrophe is \W so \b alone creates a false boundary after it)
     size_tokens = ["XXL", "XL", "XS", "S", "M", "L"]
     size = None
     for token in size_tokens:
-        if re.search(rf"\b{token}\b", text, re.IGNORECASE):
+        if re.search(rf"(?<!')\b{token}\b", text, re.IGNORECASE):
             size = token
-            text = re.sub(rf"\b{token}\b", "", text, flags=re.IGNORECASE)
+            text = re.sub(rf"(?<!')\b{token}\b", "", text, flags=re.IGNORECASE)
             break
+
+    # Drop context phrases like "to go with my jeans" — they describe what the
+    # user already owns, not what they're searching for, and would score against
+    # the wrong listing category.
+    text = re.sub(
+        r"\b(to go with|to wear with|to match|that goes? with|that'll go with)\b.*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
 
     description = re.sub(r"\s+", " ", text).strip()
 
@@ -144,7 +156,11 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         wardrobe=session["wardrobe"],
     )
 
-    # Step 6: create the fit card
+    # Step 6: create the fit card — skip if wardrobe was empty (no real outfit to caption)
+    if not session["wardrobe"].get("items"):
+        session["fit_card"] = None
+        return session
+
     session["fit_card"] = create_fit_card(
         outfit=session["outfit_suggestion"],
         new_item=session["selected_item"],
